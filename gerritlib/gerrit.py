@@ -20,6 +20,7 @@ import select
 import six.moves
 import threading
 import time
+import subprocess
 
 import paramiko
 
@@ -246,7 +247,7 @@ class Gerrit(object):
             # separated by ' - ' sequence
             cmd += ' --description'
         out, err = self._ssh(cmd)
-        return filter(None, out.split('\n'))
+        return filter(None, out.splitlines())
 
     def listGroups(self, verbose=False):
         if verbose:
@@ -254,7 +255,7 @@ class Gerrit(object):
         else:
             cmd = 'gerrit ls-groups'
         out, err = self._ssh(cmd)
-        return filter(None, out.split('\n'))
+        return filter(None, out.splitlines())
 
     def listPlugins(self):
         plugins = self.getPlugins()
@@ -283,7 +284,7 @@ class Gerrit(object):
             except Exception:
                 cmd = 'gerrit replicate %s' % project
         out, err = self._ssh(cmd)
-        return out.split('\n')
+        return out.splitlines()
 
     def review(self, project, change, message, action={}):
         cmd = 'gerrit review %s --project %s' % (change, project)
@@ -294,6 +295,16 @@ class Gerrit(object):
                 cmd += ' --%s' % k
             else:
                 cmd += ' --%s %s' % (k, v)
+        out, err = self._ssh(cmd)
+        return err
+
+    def addReviewer(self, name, commit):
+        cmd = 'gerrit set-reviewers -a %s %s' % (name, commit)
+        out, err = self._ssh(cmd)
+        return err
+
+    def rmReviewer(self, name, commit):
+        cmd = 'gerrit set-reviewers -r %s %s' % (name, commit)
         out, err = self._ssh(cmd)
         return err
 
@@ -313,7 +324,7 @@ class Gerrit(object):
         out, err = self._ssh(cmd)
         if not out:
             return False
-        lines = out.split('\n')
+        lines = out.splitlines()
         if not lines:
             return False
         data = json.loads(lines[0])
@@ -323,13 +334,24 @@ class Gerrit(object):
             pprint.pformat(data)))
         return data
 
-    def bulk_query(self, query):
-        cmd = 'gerrit query --format json %s"' % (
-            query)
-        out, err = self._ssh(cmd)
+    def bulk_query(self, query, comments=False, commit_msg=False,
+                   current_patch_set=False, submit_records=False, files=False):
+        cmd = ['gerrit', 'query', '--format', 'json']
+        if comments:
+            cmd.append('--comments')
+        if commit_msg:
+            cmd.append("--commit-message")
+        if current_patch_set:
+            cmd.append("--current-patch-set")
+        if submit_records:
+            cmd.append("--submit-records")
+        if files:
+            cmd.append('--files')
+        cmd.append(query)
+        out, err = self._ssh(subprocess.list2cmdline(cmd))
         if not out:
             return False
-        lines = out.split('\n')
+        lines = out.splitlines()
         if not lines:
             return False
 
